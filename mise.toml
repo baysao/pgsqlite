@@ -1,0 +1,51 @@
+# mise: the pgsqlite binary as a prebuilt release asset.
+#
+# The release workflow (.github/workflows/release.yml) publishes, on a v* tag:
+#   pgsqlite-linux-amd64.tar.gz    x86_64-unknown-linux-gnu
+#   pgsqlite-linux-arm64.tar.gz    aarch64-unknown-linux-gnu
+#   pgsqlite-windows-amd64.zip     x86_64-pc-windows-msvc
+#   pgsqlite-macos-intel.tar.gz    x86_64-apple-darwin
+#   pgsqlite-macos-apple-silicon.tar.gz  aarch64-apple-darwin
+# Each holds the `pgsqlite` binary at its archive root.
+#
+# Consumers install the binary instead of compiling it (~8 min cold build, needs a C toolchain):
+#   mise install pgsqlite
+#   mise which pgsqlite
+#   PGSQLITE_BIN="$(mise which pgsqlite)" bash scripts/dev.sh dev   (in the app repo)
+#
+# `version` is the release tag without its leading "v". A version bump = tag a new release.
+# Docs: https://mise.jdx.dev/dev-tools/backends/http.html
+
+[tools."http:pgsqlite"]
+version = "0.0.22"
+# Per-platform URLs: the asset names differ per OS/arch, and windows ships a .zip.
+[tools."http:pgsqlite".platforms]
+linux-x64 = { url = "https://github.com/baysao/pgsqlite/releases/download/v{{ version }}/pgsqlite-linux-amd64.tar.gz" }
+linux-arm64 = { url = "https://github.com/baysao/pgsqlite/releases/download/v{{ version }}/pgsqlite-linux-arm64.tar.gz" }
+macos-x64 = { url = "https://github.com/baysao/pgsqlite/releases/download/v{{ version }}/pgsqlite-macos-intel.tar.gz" }
+macos-arm64 = { url = "https://github.com/baysao/pgsqlite/releases/download/v{{ version }}/pgsqlite-macos-apple-silicon.tar.gz" }
+windows-x64 = { url = "https://github.com/baysao/pgsqlite/releases/download/v{{ version }}/pgsqlite-windows-amd64.zip" }
+# One binary in the archive: `bin` names it, so mise installs it executable at the root.
+bin = "pgsqlite"
+
+# ---------------------------------------------------------------- gates
+
+[tasks.build]
+description = "Release build (the same command the release workflow runs)"
+run = "cargo build --release"
+
+[tasks.test]
+description = "The test suite"
+run = "cargo test --all-features"
+
+[tasks.gates]
+description = "fmt, clippy and the tests in one run"
+run = [
+  "cargo fmt --all --check",
+  "cargo clippy --all-targets --all-features -- -D warnings",
+  "cargo test --all-features",
+]
+
+[tasks."release"]
+description = "Tag v$VERSION and let the release workflow publish the binaries (arg = version)"
+run = "git tag -a v${1} -m \"pgsqlite v${1}\" && git push origin v${1}"
